@@ -143,12 +143,24 @@ try:
 
     if torch.cuda.is_available():
         device = torch.device("cuda")
-        model.to(device).half().eval()
-        x = torch.zeros(2, 3, 256, 256, device=device, dtype=torch.float16)
-        with torch.inference_mode():
-            out = model(x)
-        check("model forward pass on GPU", True, f"output shape {tuple(out.shape)}")
-        del model, model_ema, x, out
+        model.to(device).eval()
+        # Try fp16 first (required for H200 inference path); P40/Pascal will fall back to fp32
+        for dtype, label in [(torch.float16, "fp16"), (torch.float32, "fp32")]:
+            try:
+                m = model.half() if dtype == torch.float16 else model.float()
+                x = torch.zeros(2, 3, 256, 256, device=device, dtype=dtype)
+                with torch.inference_mode():
+                    out = m(x)
+                note = "" if dtype == torch.float16 else " (fp16 unsupported on this GPU — H200 will use fp16)"
+                check("model forward pass on GPU", True, f"{label}, output {tuple(out.shape)}{note}",
+                      warn=(dtype == torch.float32))
+                del x, out
+                break
+            except Exception:
+                if dtype == torch.float32:
+                    check("model forward pass on GPU", False, "failed in both fp16 and fp32")
+                torch.cuda.empty_cache()
+        del model, model_ema
         torch.cuda.empty_cache()
 
 except Exception as e:
@@ -164,7 +176,10 @@ try:
     import wandb
 
     api_key = os.environ.get("WANDB_API_KEY", "")
-    check("WANDB_API_KEY set", bool(api_key), "set" if api_key else "not set — add to job script or run `wandb login`")
+    logged_in = bool(api_key) or bool(getattr(wandb.api, "api_key", None))
+    check("W&B authenticated", logged_in,
+          "via env var" if api_key else ("via wandb login" if logged_in else
+          "not authenticated — set WANDB_API_KEY in job script or run `wandb login`"))
 
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--wandb-project", default=None)
@@ -176,7 +191,7 @@ try:
                 project = args.wandb_project,
                 name    = "env-test",
                 config  = {"test": True},
-                reinit  = True,
+                reinit  = "finish_previous",
             )
             wandb.log({"test_metric": 1.0})
             run.finish()
