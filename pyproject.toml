@@ -1,0 +1,9 @@
+[project]
+name = "trec-seg2d"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.10"
+dependencies = [
+    "zarr>=3",
+    "tifffile",
+]
