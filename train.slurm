@@ -29,5 +29,5 @@ python train.py \
     --loss       mcc_ce \
     --patience      20 \
     --workers       24 \
-    --wandb True\
+    --wandb \
     --wandb_project plankton_2d
