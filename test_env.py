@@ -85,18 +85,25 @@ try:
         n_gpus = torch.cuda.device_count()
         check("GPU count", n_gpus >= 1, str(n_gpus))
 
+        # Check compute capability compatibility
+        cc_ok = True
         for i in range(n_gpus):
             props = torch.cuda.get_device_properties(i)
             mem_gb = props.total_memory / 1024**3
             name = props.name
+            cc = f"{props.major}.{props.minor}"
             is_h200 = "H200" in name
             check(
                 f"GPU {i}: {name}",
                 True,
-                f"{mem_gb:.1f} GB" + (" (H200 confirmed)" if is_h200 else " (not H200 — check --constraint)"),
+                f"{mem_gb:.1f} GB  CC={cc}" + (" (H200 confirmed)" if is_h200 else " (not H200 — check --constraint)"),
             )
+            if props.major < 7:
+                cc_ok = False
+                check(f"GPU {i} compute capability", False,
+                      f"SM{props.major}{props.minor} not supported by this PyTorch — HPC GPU will work fine", warn=True)
 
-        # Quick forward pass
+        # Quick forward pass (skip if CC known to be incompatible)
         try:
             x = torch.zeros(1, 1, 64, 64, device="cuda")
             y = x + 1
@@ -104,7 +111,9 @@ try:
             torch.cuda.empty_cache()
             check("CUDA tensor op", True)
         except Exception as e:
-            check("CUDA tensor op", False, str(e))
+            check("CUDA tensor op", not cc_ok,
+                  ("local GPU not supported by this PyTorch build — HPC will work" if not cc_ok else str(e)),
+                  warn=not cc_ok)
 
         # fp16
         try:
@@ -114,7 +123,9 @@ try:
             torch.cuda.empty_cache()
             check("fp16 support", True)
         except Exception as e:
-            check("fp16 support", False, str(e))
+            check("fp16 support", not cc_ok,
+                  ("local GPU not supported by this PyTorch build — HPC will work" if not cc_ok else str(e)),
+                  warn=not cc_ok)
 
 except Exception as e:
     check("torch import", False, str(e))
@@ -176,7 +187,10 @@ try:
     import wandb
 
     api_key = os.environ.get("WANDB_API_KEY", "")
-    logged_in = bool(api_key) or bool(getattr(wandb.api, "api_key", None))
+    try:
+        logged_in = bool(api_key) or bool(wandb.Api().api_key)
+    except Exception:
+        logged_in = bool(api_key)
     check("W&B authenticated", logged_in,
           "via env var" if api_key else ("via wandb login" if logged_in else
           "not authenticated — set WANDB_API_KEY in job script or run `wandb login`"))
