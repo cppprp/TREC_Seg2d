@@ -4,6 +4,15 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.10"
 dependencies = [
+    "torch",
+    "torchvision",
     "zarr>=3",
     "tifffile",
+    "wandb",
+    "segmentation-models-pytorch",
+    "scipy",
+    "scikit-image",
+    "tqdm",
+    "numpy",
+    "connected-components-3d",
 ]

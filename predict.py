@@ -138,7 +138,7 @@ def _open_volume(path: Path):
     return zarr.open(str(path), mode='r')['0']
 
 
-def setup_model(model_path, input_size=512, n_channels=1, batch_size=None):
+def setup_model(model_path, input_size=256, n_channels=1, batch_size=None):
 
     torch.set_float32_matmul_precision('medium')
 
@@ -162,7 +162,7 @@ def setup_model(model_path, input_size=512, n_channels=1, batch_size=None):
     return model, batch_size
 
 
-def predict_volume(zarr_file, prediction_file, temp_folder, model, window, input_size=512, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2]):
+def predict_volume(zarr_file, prediction_file, temp_folder, model, window, input_size=256, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2]):
 
     if batch_size is None:
         raise ValueError("batch_size must be provided")
@@ -248,7 +248,7 @@ def predict_volume(zarr_file, prediction_file, temp_folder, model, window, input
     print(f'Completed volume {zarr_file.name} {tuple(input_volume_shape.astype(int).tolist())} in {time_elapsed}.')
 
 
-def predict_all_volumes(zarr_files, project_path, input_size=512, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2]):
+def predict_all_volumes(zarr_files, project_path, input_size=256, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2]):
 
     project_path = Path(project_path)
 
@@ -386,7 +386,7 @@ def main():
                    help='One or more .tif/.tiff/.zarr volume paths.')
     p.add_argument('--project',    required=True, type=Path,
                    help='Project directory containing model.ckpt; predictions saved under <project>/predictions/.')
-    p.add_argument('--input_size', type=int,   default=256,
+    p.add_argument('--input_size', type=int,   default=256,  # must match training --input_size
                    help='Sliding-window block size in voxels (default: 256).')
     p.add_argument('--n_channels', type=int,   default=1,
                    help='1 = single-slice, 3 = 2.5D triplet — must match training (default: 1).')
