@@ -2,10 +2,9 @@
 #SBATCH --job-name=trec_a40_test
 #SBATCH --nodes=1
 #SBATCH --partition=gpu-el8
-#SBATCH --gpus=1
-#SBATCH --constraint=gpu=A40
-#SBATCH --cpus-per-gpu=64
-#SBATCH --mem-per-gpu=514286
+#SBATCH --gres=gpu:A40:1
+#SBATCH --cpus-per-task=64
+#SBATCH --mem=514286
 #SBATCH --time=01:00:00
 #SBATCH --output=logs/train_a40_test_%j.log
 
