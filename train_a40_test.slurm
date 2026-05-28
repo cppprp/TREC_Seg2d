@@ -1,12 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=trec_a40_test
+#SBATCH --job-name=trec_l40s_test
 #SBATCH --nodes=1
 #SBATCH --partition=gpu-el8
-#SBATCH --gres=gpu:A40:1
-#SBATCH --cpus-per-task=64
-#SBATCH --mem=514286
+#SBATCH --gpus=1
+#SBATCH --constraint=gpu=L40s
+#SBATCH --cpus-per-gpu=32
+#SBATCH --mem-per-gpu=193411
 #SBATCH --time=01:00:00
-#SBATCH --output=logs/train_a40_test_%j.log
+#SBATCH --output=logs/train_l40s_test_%j.log
 
 mkdir -p logs
 
@@ -27,7 +28,7 @@ python train.py \
     --pretrained \
     --loss       mcc_ce \
     --patience       0 \
-    --workers       64 \
+    --workers       32 \
     --wandb \
     --wandb_project plankton_2d \
-    --wandb_run     a40_test
+    --wandb_run     l40s_test
