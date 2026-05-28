@@ -15,6 +15,8 @@ mkdir -p logs
 source ~/.bashrc
 conda activate trec_seg
 
+export WANDB_DIR=/g/duke-mirror/asvetlove/TREC_seg/results/wandb
+
 
 python train.py \
     --patches  /g/duke-mirror/asvetlove/TREC_seg/training_data/ \

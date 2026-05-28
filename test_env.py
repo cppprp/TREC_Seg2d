@@ -12,6 +12,11 @@ import argparse
 import importlib
 import os
 import sys
+import tempfile
+
+# Prevent wandb from creating a wandb/ directory inside the source tree,
+# which would shadow the wandb package on the next import.
+os.environ.setdefault("WANDB_DIR", tempfile.gettempdir())
 
 
 PASS = "  [PASS]"
