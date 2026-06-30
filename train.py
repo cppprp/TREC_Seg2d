@@ -129,10 +129,11 @@ def train(args):
 
             with torch.autocast(device.type, enabled=(device.type in ('cuda', 'mps'))):
                 preds = model(images)
-                loss  = compute_loss(preds, targets, weights,
-                                     loss=args.loss,
-                                     weight_a=args.loss_weight_a,
-                                     weight_b=args.loss_weight_b)
+
+            loss = compute_loss(preds.float(), targets, weights,
+                                loss=args.loss,
+                                weight_a=args.loss_weight_a,
+                                weight_b=args.loss_weight_b)
 
             scaler.scale(loss).backward()
             scaler.unscale_(opt)
@@ -141,7 +142,7 @@ def train(args):
             scaler.update()
             ema_update(model, model_ema, decay=args.ema_decay)
 
-            if not torch.isnan(loss):
+            if torch.isfinite(loss):
                 train_loss += loss.item()
                 n_batches  += 1
 
@@ -163,13 +164,14 @@ def train(args):
 
                 with torch.autocast(device.type, enabled=(device.type in ('cuda', 'mps'))):
                     preds = model_ema(images)
-                    loss  = compute_loss(preds, targets, weights,
-                                         loss=args.loss,
-                                         weight_a=args.loss_weight_a,
-                                         weight_b=args.loss_weight_b)
+
+                loss = compute_loss(preds.float(), targets, weights,
+                                    loss=args.loss,
+                                    weight_a=args.loss_weight_a,
+                                    weight_b=args.loss_weight_b)
 
                 dice_metrics   = compute_dice(preds, targets)
-                val_loss      += loss.item()
+                val_loss      += loss.item() if torch.isfinite(loss) else 0.0
                 val_dice_fg   += dice_metrics['dice_foreground']
                 val_dice_bd   += dice_metrics['dice_boundary']
                 n_val_batches += 1

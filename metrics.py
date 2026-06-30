@@ -74,7 +74,7 @@ def crossentropy_loss(y_pred, y_true, weight=None, axes=[2, 3]):
     Computes the crossentropy loss along the given axes and then
     takes the mean across the remaining axes.
     """
-    epsilon = 1e-12
+    epsilon = 1e-6
     if weight is not None:
         ce = weight * (y_true * torch.log(y_pred + epsilon)
                        + (1 - y_true) * torch.log(1 - y_pred + epsilon))
@@ -159,7 +159,7 @@ def mcc(y_pred, y_true, weight=None, axes=[2, 3]):
     Computes the Matthews correlation coefficient (MCC) along the given axes
     and then takes the mean across the remaining axes.
     """
-    epsilon = 1e-12
+    epsilon = 1e-6
     tp = true_positives(y_pred, y_true, weight, axes)
     tn = true_negatives(y_pred, y_true, weight, axes)
     fp = false_positives(y_pred, y_true, weight, axes)
