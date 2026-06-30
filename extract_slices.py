@@ -13,7 +13,7 @@ import numpy as np
 import torch
 from scipy.ndimage import map_coordinates
 from scipy.spatial.transform import Rotation
-from skimage.morphology import disk, binary_dilation
+from skimage.morphology import disk, dilation
 from skimage.segmentation import find_boundaries
 
 
@@ -189,7 +189,7 @@ def mask_transform_2d(mask_2d: np.ndarray) -> torch.Tensor:
             continue
         label_mask = (mask_2d == label_id)
         label_boundaries = find_boundaries(label_mask, mode='thick')
-        label_boundaries = binary_dilation(label_boundaries, disk(1))
+        label_boundaries = dilation(label_boundaries, disk(1))
         boundaries = np.logical_or(boundaries, label_boundaries)
 
     return torch.stack([

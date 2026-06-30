@@ -165,8 +165,9 @@ def mcc(y_pred, y_true, weight=None, axes=[2, 3]):
     fp = false_positives(y_pred, y_true, weight, axes)
     fn = false_negatives(y_pred, y_true, weight, axes)
     num = (tp * tn) - (fp * fn)
-    den = ((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)) ** 0.5
-    mcc_score = (num + epsilon) / (den + epsilon)
+    # Clamp before sqrt to avoid infinite gradients when denominator is near zero
+    den = torch.sqrt(torch.clamp((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn), min=epsilon))
+    mcc_score = num / (den + epsilon)
     return torch.mean(mcc_score)
 
 

@@ -135,12 +135,15 @@ def train(args):
                                      weight_b=args.loss_weight_b)
 
             scaler.scale(loss).backward()
+            scaler.unscale_(opt)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             scaler.step(opt)
             scaler.update()
             ema_update(model, model_ema, decay=args.ema_decay)
 
-            train_loss += loss.item()
-            n_batches  += 1
+            if not torch.isnan(loss):
+                train_loss += loss.item()
+                n_batches  += 1
 
         scheduler.step()
         train_loss /= max(n_batches, 1)

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import torch
 import tifffile
+from webknossos_zarr import open_webknossos_zarr
 
 def find_max_batch_size(model, input_size=256, n_channels=1, start=4, max_limit=512):
 
@@ -130,8 +131,12 @@ class _TifVolume:
         return self._arr[idx]
 
 
-def _open_volume(path: Path):
-    """Open a zarr or tif volume, returning an array-like with .shape/.chunks/.shards."""
+def _open_volume(path):
+    """Open a zarr, tif, or remote WebKnossos volume. Returns array-like with .shape/.chunks/.shards."""
+    url = str(path)
+    if url.startswith(("http://", "https://")):
+        return open_webknossos_zarr(url)
+    path = Path(path)
     suffix = path.suffix.lower()
     if suffix in ('.tif', '.tiff'):
         return _TifVolume(path)
