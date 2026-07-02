@@ -22,7 +22,7 @@ source ~/.bashrc
 conda activate trec_seg
 
 python predict.py \
-    --input      /g/duke-mirror/asvetlove/IMATREC_volumes/POR_10to40_20231023_AM_01_epo_02/*.tif \
+    --input      /g/duke-mirror/asvetlove/IMATREC_volumes/POR_10to40_20231023_AM_01_epo_02 \
     --project    /g/duke-mirror/asvetlove/TREC_seg/results \
     --input_size 256 \
     --n_channels   3 \

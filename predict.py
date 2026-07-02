@@ -131,12 +131,43 @@ class _TifVolume:
         return self._arr[idx]
 
 
+class _TifSeriesVolume:
+    """Assembles a sorted directory of 2-D TIF slices into a virtual (Z, Y, X) volume."""
+
+    def __init__(self, directory: Path):
+        self._paths = sorted(directory.glob('*.tif')) + sorted(directory.glob('*.tiff'))
+        # deduplicate while preserving sort order (a file won't match both, but just in case)
+        seen = set()
+        self._paths = [p for p in self._paths if not (p in seen or seen.add(p))]
+        if not self._paths:
+            raise ValueError(f"No .tif/.tiff files found in {directory}")
+        first = tifffile.imread(str(self._paths[0]))
+        if first.ndim != 2:
+            raise ValueError(f"Expected 2-D TIF slices, got shape {first.shape} in {self._paths[0].name}")
+        self._shape = (len(self._paths), first.shape[0], first.shape[1])
+        self.chunks = (_DEFAULT_CHUNK, _DEFAULT_CHUNK, _DEFAULT_CHUNK)
+        self.shards = (_DEFAULT_SHARD, _DEFAULT_SHARD, _DEFAULT_SHARD)
+        print(f"  TIF series: {len(self._paths)} slices → volume {self._shape}")
+
+    @property
+    def shape(self):
+        return self._shape
+
+    def __getitem__(self, idx):
+        z_sl, y_sl, x_sl = idx
+        z_range = range(*z_sl.indices(self._shape[0]))
+        planes = [tifffile.imread(str(self._paths[z]))[y_sl, x_sl] for z in z_range]
+        return np.stack(planes, axis=0) if planes else np.empty((0,) + self._shape[1:], dtype=np.uint8)
+
+
 def _open_volume(path):
-    """Open a zarr, tif, or remote WebKnossos volume. Returns array-like with .shape/.chunks/.shards."""
+    """Open a zarr, tif series dir, single-file tif, or remote WebKnossos volume."""
     url = str(path)
     if url.startswith(("http://", "https://")):
         return open_webknossos_zarr(url)
     path = Path(path)
+    if path.is_dir() and not str(path).endswith('.zarr'):
+        return _TifSeriesVolume(path)
     suffix = path.suffix.lower()
     if suffix in ('.tif', '.tiff'):
         return _TifVolume(path)
