@@ -22,9 +22,10 @@ source ~/.bashrc
 conda activate trec_seg
 
 python predict.py \
-    --input      /scratch/asvetlove/volumes/*.tif \
-    --project    /scratch/asvetlove/project_2d \
+    --input      /g/duke-mirror/asvetlove/IMATREC_volumes/POR_10to40_20231023_AM_01_epo_02/*.tif \
+    --project    /g/duke-mirror/asvetlove/TREC_seg/results \
     --input_size 256 \
     --n_channels   3 \
     --overlap    0.25 \
-    --axes       0 1 2
+    --axes       0 1 2 \
+    --save_tiff

@@ -167,7 +167,19 @@ def setup_model(model_path, input_size=256, n_channels=1, batch_size=None):
     return model, batch_size
 
 
-def predict_volume(zarr_file, prediction_file, temp_folder, model, window, input_size=256, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2]):
+def _write_tiff_from_zarr(prediction_file, out_dir, stem, channels):
+    channel_map = {'foreground': 0, 'boundary': 1}
+    arr = zarr.open(str(prediction_file), 'r')['0']  # (Z, Y, X, 2) uint8
+    for name in channels:
+        out_path = out_dir / f'{stem}_{name}.tif'
+        ch = channel_map[name]
+        with tifffile.TiffWriter(str(out_path), bigtiff=True) as tw:
+            for z in range(arr.shape[0]):
+                tw.write(arr[z, :, :, ch])
+        print(f'  Saved {out_path.name}')
+
+
+def predict_volume(zarr_file, prediction_file, temp_folder, model, window, input_size=256, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2], save_tiff=None):
 
     if batch_size is None:
         raise ValueError("batch_size must be provided")
@@ -249,11 +261,14 @@ def predict_volume(zarr_file, prediction_file, temp_folder, model, window, input
         if temp_folder.exists():
             shutil.rmtree(temp_folder)
 
+    if save_tiff:
+        _write_tiff_from_zarr(prediction_file, prediction_file.parent, zarr_file.stem, save_tiff)
+
     time_elapsed = time.time() - start_time
     print(f'Completed volume {zarr_file.name} {tuple(input_volume_shape.astype(int).tolist())} in {time_elapsed}.')
 
 
-def predict_all_volumes(zarr_files, project_path, input_size=256, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2]):
+def predict_all_volumes(zarr_files, project_path, input_size=256, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2], save_tiff=None):
 
     project_path = Path(project_path)
 
@@ -279,7 +294,8 @@ def predict_all_volumes(zarr_files, project_path, input_size=256, n_channels=1, 
             num_classes=num_classes,
             batch_size=batch_size,
             overlap=overlap,
-            axes=axes
+            axes=axes,
+            save_tiff=save_tiff,
         )
 
     print('\nAll volumes segmented.\n')
@@ -403,7 +419,19 @@ def main():
                    help='Inference batch size; auto-detected from GPU memory if omitted.')
     p.add_argument('--num_classes', type=int,  default=2,
                    help='Number of output classes (default: 2).')
+    p.add_argument('--save_tiff', nargs='*', metavar='CHANNEL',
+                   help='Write per-channel BigTIFF stacks. '
+                        'No args = both channels; '
+                        'or specify: foreground boundary')
     args = p.parse_args()
+
+    if args.save_tiff is not None:
+        valid = {'foreground', 'boundary'}
+        bad = set(args.save_tiff) - valid
+        if bad:
+            p.error(f'--save_tiff: unknown channel(s) {bad}. Choose from: {valid}')
+        if not args.save_tiff:
+            args.save_tiff = ['foreground', 'boundary']
 
     # Expand any glob-like paths the shell didn't expand
     inputs = []
@@ -425,6 +453,7 @@ def main():
         batch_size  = args.batch_size,
         overlap     = args.overlap,
         axes        = args.axes,
+        save_tiff   = args.save_tiff,
     )
 
 
