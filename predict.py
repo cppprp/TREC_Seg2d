@@ -9,7 +9,7 @@ from pathlib import Path
 
 import torch
 import tifffile
-from webknossos_zarr import open_webknossos_zarr
+
 
 def find_max_batch_size(model, input_size=256, n_channels=1, start=4, max_limit=512):
 
