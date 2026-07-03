@@ -16,11 +16,13 @@ from dataclasses import dataclass
 class TrainConfig:
 
     # ── Paths ─────────────────────────────────────────────────────────────────
-    patches: str = './patches'      # root folder of annotated 3D patches
-    project: str = './project_2d'  # output folder — model.ckpt is saved here
+    patches:    str = ''             # root folder of annotated 3D patches (optional)
+    patches_2d: str = ''             # root folder of annotated 2D images  (optional)
+    project:    str = './project_2d' # output folder — model.ckpt is saved here
 
     # ── Data ──────────────────────────────────────────────────────────────────
-    slices_per_patch: int   = 30    # virtual samples drawn from each patch per epoch
+    slices_per_patch:  int   = 30   # virtual samples drawn from each 3D patch per epoch
+    patches_per_image: int   = 30   # random crops drawn from each 2D image per epoch
     input_size:       int   = 256   # slice H and W in pixels
     n_channels:       int   = 1     # 1 = single 2D slice,  3 = 2.5D triplet
     channel_spacing:  float = 1.0   # voxel gap between 2.5D channels

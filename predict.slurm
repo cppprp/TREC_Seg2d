@@ -5,7 +5,7 @@
 #SBATCH --gpus=1
 #SBATCH --constraint=gpu=H100
 #SBATCH --ntasks-per-node=8
-#SBATCH --mem-per-gpu=60000
+#SBATCH --mem-per-gpu=128000
 #SBATCH --cpus-per-task=1
 #SBATCH --time=12:00:00
 #SBATCH --output=logs/predict_%j.log

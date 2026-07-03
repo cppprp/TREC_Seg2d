@@ -22,6 +22,7 @@ Usage:
 import numpy as np
 import torch
 import zarr
+import tifffile
 from pathlib import Path
 from torch.utils.data import Dataset
 from torchvision.transforms import v2
@@ -35,13 +36,15 @@ from extract_slices import extract_random_slice, mask_transform_2d
 # ---------------------------------------------------------------------------
 
 def _load_volume(path: Path) -> np.ndarray:
-    """Load a volume from .npy or .zarr directory."""
+    """Load a volume from .npy, .zarr directory, or .tif/.tiff."""
     if path.suffix == '.npy':
         return np.load(path)
+    elif path.suffix in ('.tif', '.tiff'):
+        return tifffile.imread(str(path))
     elif path.is_dir():
         return np.array(zarr.open(str(path), mode='r')['0'])
     else:
-        raise ValueError(f"Unknown volume format: {path}  (expected .npy or .zarr/)")
+        raise ValueError(f"Unknown volume format: {path}  (expected .npy, .tif, or .zarr/)")
 
 
 def _find_patch_pairs(patches_dir: Path) -> list[tuple[Path, Path]]:
@@ -54,9 +57,9 @@ def _find_patch_pairs(patches_dir: Path) -> list[tuple[Path, Path]]:
         if not vol_dir.is_dir():
             continue
 
-        # Try .npy first, then .zarr
+        # Try .npy first, then .zarr, then .tif/.tiff
         image_path = mask_path = None
-        for ext in ['.npy', '.zarr']:
+        for ext in ['.npy', '.zarr', '.tif', '.tiff']:
             img_candidate  = vol_dir / f'image{ext}'
             mask_candidate = vol_dir / f'mask{ext}'
             if img_candidate.exists() and mask_candidate.exists():
@@ -223,6 +226,117 @@ class TiltedSliceDataset(Dataset):
         image_t = torch.tensor(img_slice, dtype=torch.float32)  # (C, H, W)
 
         # Augmentation (flips only — safe for both image and mask)
+        if self.transforms is not None:
+            image_t = tv_tensors.Image(image_t)
+            target  = tv_tensors.Mask(target)
+            weight  = tv_tensors.Mask(weight)
+            image_t, target, weight = self.transforms(image_t, target, weight)
+            image_t = image_t.as_subclass(torch.Tensor)
+            target  = target.as_subclass(torch.Tensor)
+            weight  = weight.as_subclass(torch.Tensor)
+
+        return image_t, target, weight
+
+
+# ---------------------------------------------------------------------------
+# 2D flat-image dataset
+# ---------------------------------------------------------------------------
+
+class FlatSliceDataset(Dataset):
+    """
+    Random crops from fully-annotated 2D images.
+
+    Expected layout:
+        patches_2d_dir/
+            image_001/
+                image.tif   (H, W) — or .npy
+                mask.tif    (H, W) uint8 instance labels
+            image_002/
+                ...
+
+    Always returns (1, H, W) images regardless of n_channels — 2.5D has no
+    meaning for 2D sources.  Must be used with n_channels=1 in train.py.
+    """
+
+    def __init__(
+        self,
+        patches_dir:      str | Path,
+        patches_per_image: int  = 30,
+        output_size:      int   = 256,
+        augment:          bool  = True,
+        preload:          bool  = True,
+    ):
+        self.patches_dir       = Path(patches_dir)
+        self.patches_per_image = patches_per_image
+        self.output_size       = output_size
+        self.augment           = augment
+
+        pairs = _find_patch_pairs(self.patches_dir)
+        if len(pairs) == 0:
+            raise FileNotFoundError(f"No image/mask pairs found under {self.patches_dir}")
+        print(f"Found {len(pairs)} 2D image pairs in {self.patches_dir}")
+
+        if preload:
+            print("Preloading 2D images into RAM...")
+            self.patches = []
+            for img_path, mask_path in pairs:
+                img  = _load_volume(img_path).astype(np.float32)
+                mask = _load_volume(mask_path).astype(np.uint8)
+                if img.ndim != 2 or mask.ndim != 2:
+                    raise ValueError(
+                        f"FlatSliceDataset expects 2-D arrays; "
+                        f"got image {img.shape} mask {mask.shape} in {img_path.parent}"
+                    )
+                self.patches.append((img, mask))
+                print(f"  {img_path.parent.name}  image{img.shape}  mask{mask.shape}")
+        else:
+            self.patch_paths = pairs
+            self.patches     = None
+
+        self.transforms = v2.Compose([
+            v2.RandomHorizontalFlip(p=0.5),
+            v2.RandomVerticalFlip(p=0.5),
+        ]) if augment else None
+
+    def __len__(self) -> int:
+        n = len(self.patches) if self.patches is not None else len(self.patch_paths)
+        return n * self.patches_per_image
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        n_pairs = len(self.patches) if self.patches is not None else len(self.patch_paths)
+        patch_idx = idx % n_pairs
+
+        if self.patches is not None:
+            image, mask = self.patches[patch_idx]
+        else:
+            img_path, mask_path = self.patch_paths[patch_idx]
+            image = _load_volume(img_path).astype(np.float32)
+            mask  = _load_volume(mask_path).astype(np.uint8)
+
+        H, W = image.shape
+        S = self.output_size
+
+        # Random crop (reflect-pad if image is smaller than crop size)
+        if H < S or W < S:
+            pad_h = max(0, S - H)
+            pad_w = max(0, S - W)
+            image = np.pad(image, ((0, pad_h), (0, pad_w)), mode='reflect')
+            mask  = np.pad(mask,  ((0, pad_h), (0, pad_w)), mode='reflect')
+            H, W  = image.shape
+
+        y0 = np.random.randint(0, H - S + 1)
+        x0 = np.random.randint(0, W - S + 1)
+        img_crop  = image[y0:y0+S, x0:x0+S]
+        mask_crop = mask[y0:y0+S, x0:x0+S]
+
+        # Normalise to [0, 1]
+        lo, hi = img_crop.min(), img_crop.max()
+        img_crop = (img_crop - lo) / (hi - lo + 1e-8)
+
+        target = mask_transform_2d(mask_crop)       # (2, H, W) float32
+        weight = _compute_sample_weight(mask_crop)  # (2, H, W) float32
+        image_t = torch.tensor(img_crop[None], dtype=torch.float32)  # (1, H, W)
+
         if self.transforms is not None:
             image_t = tv_tensors.Image(image_t)
             target  = tv_tensors.Mask(target)

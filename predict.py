@@ -132,32 +132,33 @@ class _TifVolume:
 
 
 class _TifSeriesVolume:
-    """Assembles a sorted directory of 2-D TIF slices into a virtual (Z, Y, X) volume."""
+    """Loads a sorted directory of 2-D TIF slices into a single (Z, Y, X) array in RAM."""
 
     def __init__(self, directory: Path):
-        self._paths = sorted(directory.glob('*.tif')) + sorted(directory.glob('*.tiff'))
-        # deduplicate while preserving sort order (a file won't match both, but just in case)
+        paths = sorted(directory.glob('*.tif')) + sorted(directory.glob('*.tiff'))
         seen = set()
-        self._paths = [p for p in self._paths if not (p in seen or seen.add(p))]
-        if not self._paths:
+        paths = [p for p in paths if not (p in seen or seen.add(p))]
+        if not paths:
             raise ValueError(f"No .tif/.tiff files found in {directory}")
-        first = tifffile.imread(str(self._paths[0]))
+        first = tifffile.imread(str(paths[0]))
         if first.ndim != 2:
-            raise ValueError(f"Expected 2-D TIF slices, got shape {first.shape} in {self._paths[0].name}")
-        self._shape = (len(self._paths), first.shape[0], first.shape[1])
+            raise ValueError(f"Expected 2-D TIF slices, got shape {first.shape} in {paths[0].name}")
+        Z, H, W = len(paths), first.shape[0], first.shape[1]
+        print(f"  TIF series: loading {Z} slices ({H}×{W}) into RAM...")
+        self._arr = np.empty((Z, H, W), dtype=first.dtype)
+        self._arr[0] = first
+        for i, p in enumerate(paths[1:], 1):
+            self._arr[i] = tifffile.imread(str(p))
+        print(f"  Loaded {self._arr.nbytes / 1e9:.1f} GB")
         self.chunks = (_DEFAULT_CHUNK, _DEFAULT_CHUNK, _DEFAULT_CHUNK)
         self.shards = (_DEFAULT_SHARD, _DEFAULT_SHARD, _DEFAULT_SHARD)
-        print(f"  TIF series: {len(self._paths)} slices → volume {self._shape}")
 
     @property
     def shape(self):
-        return self._shape
+        return self._arr.shape
 
     def __getitem__(self, idx):
-        z_sl, y_sl, x_sl = idx
-        z_range = range(*z_sl.indices(self._shape[0]))
-        planes = [tifffile.imread(str(self._paths[z]))[y_sl, x_sl] for z in z_range]
-        return np.stack(planes, axis=0) if planes else np.empty((0,) + self._shape[1:], dtype=np.uint8)
+        return self._arr[idx]
 
 
 def _open_volume(path):
@@ -265,7 +266,10 @@ def predict_volume(zarr_file, prediction_file, temp_folder, model, window, input
         print(f'\nSegmenting {zarr_file.name}...')
         for i in tqdm(range(num_blocks)):
 
-            padded_block = torch.tensor(get_padded_block(volume, *padded_block_coords[i]).astype('float32') / 255.0)
+            padded_block = get_padded_block(volume, *padded_block_coords[i]).astype('float32')
+            bmin, bmax = padded_block.min(), padded_block.max()
+            padded_block = (padded_block - bmin) / (bmax - bmin + 1e-8)
+            padded_block = torch.tensor(padded_block)
 
             predicted_block = predict_block(model, padded_block, num_classes=num_classes, n_channels=n_channels, batch_size=batch_size, axes=axes)
 

@@ -22,12 +22,12 @@ import time
 from pathlib import Path
 
 import torch
-from torch.utils.data import DataLoader, Subset, random_split
+from torch.utils.data import ConcatDataset, DataLoader, Subset, random_split
 
 import wandb
 
 from config  import DEFAULT_CONFIG
-from dataset import TiltedSliceDataset
+from dataset import FlatSliceDataset, TiltedSliceDataset
 from metrics import compute_dice, compute_loss
 from model   import build_model, ema_update
 
@@ -45,16 +45,35 @@ def train(args):
     project_path.mkdir(parents=True, exist_ok=True)
 
     # --- Dataset ---
-    full_dataset = TiltedSliceDataset(
-        patches_dir      = args.patches,
-        slices_per_patch = args.slices_per_patch,
-        output_size      = args.input_size,
-        n_channels       = args.n_channels,
-        channel_spacing  = args.channel_spacing,
-        max_tilt_deg     = args.max_tilt,
-        augment          = True,
-        preload          = True,
-    )
+    def _disable_augment(ds):
+        if isinstance(ds, ConcatDataset):
+            for sub in ds.datasets:
+                _disable_augment(sub)
+        else:
+            ds.augment    = False
+            ds.transforms = None
+
+    datasets = []
+    if args.patches:
+        datasets.append(TiltedSliceDataset(
+            patches_dir      = args.patches,
+            slices_per_patch = args.slices_per_patch,
+            output_size      = args.input_size,
+            n_channels       = args.n_channels,
+            channel_spacing  = args.channel_spacing,
+            max_tilt_deg     = args.max_tilt,
+            augment          = True,
+            preload          = True,
+        ))
+    if args.patches_2d:
+        datasets.append(FlatSliceDataset(
+            patches_dir       = args.patches_2d,
+            patches_per_image = args.patches_per_image,
+            output_size       = args.input_size,
+            augment           = True,
+            preload           = True,
+        ))
+    full_dataset = ConcatDataset(datasets) if len(datasets) > 1 else datasets[0]
 
     # 80/20 train/val split
     n_val   = max(1, int(len(full_dataset) * 0.2))
@@ -62,11 +81,9 @@ def train(args):
     train_ds, val_ds_tmp = random_split(full_dataset, [n_train, n_val],
                                         generator=torch.Generator().manual_seed(42))
 
-    # Val needs its own dataset object — random_split shares the underlying instance,
-    # so mutating val_ds.dataset would also disable augmentation on train_ds.
+    # Val needs its own dataset object with augmentation disabled.
     val_dataset = copy.deepcopy(full_dataset)
-    val_dataset.augment    = False
-    val_dataset.transforms = None
+    _disable_augment(val_dataset)
     val_ds = Subset(val_dataset, val_ds_tmp.indices)
 
     train_loader = DataLoader(train_ds, batch_size=args.batch_size,
@@ -236,16 +253,18 @@ def parse_args():
     cfg = DEFAULT_CONFIG
     p = argparse.ArgumentParser(description='Train 2D UNet on tilted plankton slices')
 
-    # Paths (required — no sensible universal default)
-    p.add_argument('--patches',   required=True, help='Root folder of annotated 3D patches')
-    p.add_argument('--project',   required=True, help='Output folder (model.ckpt saved here)')
+    # Paths
+    p.add_argument('--patches',    default=cfg.patches,    help='Root folder of annotated 3D patches (optional if --patches_2d is set)')
+    p.add_argument('--patches_2d', default=cfg.patches_2d, help='Root folder of annotated 2D images (optional if --patches is set)')
+    p.add_argument('--project',    required=True,           help='Output folder (model.ckpt saved here)')
 
     # Data
-    p.add_argument('--slices_per_patch', type=int,   default=cfg.slices_per_patch)
-    p.add_argument('--input_size',       type=int,   default=cfg.input_size)
-    p.add_argument('--n_channels',       type=int,   default=cfg.n_channels)
-    p.add_argument('--channel_spacing',  type=float, default=cfg.channel_spacing)
-    p.add_argument('--max_tilt',         type=float, default=cfg.max_tilt)
+    p.add_argument('--slices_per_patch',  type=int,   default=cfg.slices_per_patch)
+    p.add_argument('--patches_per_image', type=int,   default=cfg.patches_per_image)
+    p.add_argument('--input_size',        type=int,   default=cfg.input_size)
+    p.add_argument('--n_channels',        type=int,   default=cfg.n_channels)
+    p.add_argument('--channel_spacing',   type=float, default=cfg.channel_spacing)
+    p.add_argument('--max_tilt',          type=float, default=cfg.max_tilt)
 
     # Model
     p.add_argument('--architecture', default=cfg.architecture)
@@ -279,4 +298,9 @@ def parse_args():
 
 
 if __name__ == '__main__':
-    train(parse_args())
+    args = parse_args()
+    if not args.patches and not args.patches_2d:
+        import sys; sys.exit("Error: at least one of --patches or --patches_2d must be provided")
+    if args.patches_2d and args.n_channels != 1:
+        import sys; sys.exit("Error: --patches_2d requires --n_channels 1 (2.5D mode has no meaning for 2D images)")
+    train(args)
