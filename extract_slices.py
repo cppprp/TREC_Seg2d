@@ -2,9 +2,9 @@
 extract_slices.py
 -----------------
 Core tilted-slice extraction logic.
-Reuses Camera directly from interactive_unet — no reinventing.
+Camera is inlined below (originally from interactive_unet.volume.camera).
 
-Imported by: check_slices.py, dataset_2d.py, train_2d.py
+Imported by: check_slices.py, dataset.py
 """
 
 from dataclasses import dataclass, field

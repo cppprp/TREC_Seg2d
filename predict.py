@@ -5,11 +5,9 @@ import shutil
 import numpy as np
 from tqdm import tqdm
 from pathlib import Path
-# from joblib import Parallel, delayed
 
 import torch
 import tifffile
-#from webknossos_zarr import open_webknossos_zarr
 
 def find_max_batch_size(model, input_size=256, n_channels=1, start=4, max_limit=512):
 
@@ -162,10 +160,7 @@ class _TifSeriesVolume:
 
 
 def _open_volume(path):
-    """Open a zarr, tif series dir, single-file tif, or remote WebKnossos volume."""
-    url = str(path)
-    #if url.startswith(("http://", "https://")):
-    #    return open_webknossos_zarr(url)
+    """Open a zarr, a directory of 2-D tif slices, or a single-file 3-D tif."""
     path = Path(path)
     if path.is_dir() and not str(path).endswith('.zarr'):
         return _TifSeriesVolume(path)
@@ -214,7 +209,7 @@ def _write_tiff_from_zarr(prediction_file, out_dir, stem, channels):
         print(f'  Done.')
 
 
-def predict_volume(zarr_file, prediction_file, temp_folder, model, window, input_size=256, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2], save_tiff=None):
+def predict_volume(zarr_file, prediction_file, temp_folder, model, window, input_size=256, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2], save_tiff=None, norm_min=0.0, norm_max=1.0):
 
     if batch_size is None:
         raise ValueError("batch_size must be provided")
@@ -270,8 +265,8 @@ def predict_volume(zarr_file, prediction_file, temp_folder, model, window, input
         for i in tqdm(range(num_blocks)):
 
             padded_block = get_padded_block(volume, *padded_block_coords[i]).astype('float32')
-            bmin, bmax = padded_block.min(), padded_block.max()
-            padded_block = (padded_block - bmin) / (bmax - bmin + 1e-8)
+            padded_block = np.clip(padded_block, norm_min, norm_max)
+            padded_block = (padded_block - norm_min) / (norm_max - norm_min)
             padded_block = torch.tensor(padded_block)
 
             predicted_block = predict_block(model, padded_block, num_classes=num_classes, n_channels=n_channels, batch_size=batch_size, axes=axes)
@@ -306,7 +301,7 @@ def predict_volume(zarr_file, prediction_file, temp_folder, model, window, input
     print(f'Completed volume {zarr_file.name} {tuple(input_volume_shape.astype(int).tolist())} in {time_elapsed}.')
 
 
-def predict_all_volumes(zarr_files, project_path, output_dir=None, input_size=256, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2], save_tiff=None, temp_dir=None):
+def predict_all_volumes(zarr_files, project_path, output_dir=None, input_size=256, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2], save_tiff=None, temp_dir=None, norm_min=0.0, norm_max=1.0):
 
     import os
     project_path = Path(project_path)
@@ -340,6 +335,8 @@ def predict_all_volumes(zarr_files, project_path, output_dir=None, input_size=25
             overlap=overlap,
             axes=axes,
             save_tiff=save_tiff,
+            norm_min=norm_min,
+            norm_max=norm_max,
         )
 
     print('\nAll volumes segmented.\n')
@@ -472,6 +469,10 @@ def main():
                    help='Write per-channel BigTIFF stacks. '
                         'No args = both channels; '
                         'or specify: foreground boundary')
+    p.add_argument('--norm_min', type=float, default=0.0,
+                   help='Fixed intensity lower bound — values below are clipped to 0 (default: 0.0).')
+    p.add_argument('--norm_max', type=float, default=1.0,
+                   help='Fixed intensity upper bound — values above are clipped to 1 (default: 1.0).')
     args = p.parse_args()
 
     if args.save_tiff is not None:
@@ -505,6 +506,8 @@ def main():
         axes        = args.axes,
         save_tiff   = args.save_tiff,
         temp_dir    = args.temp_dir,
+        norm_min    = args.norm_min,
+        norm_max    = args.norm_max,
     )
 
 

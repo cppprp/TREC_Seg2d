@@ -24,9 +24,16 @@ class TrainConfig:
     slices_per_patch:  int   = 30   # virtual samples drawn from each 3D patch per epoch
     patches_per_image: int   = 30   # random crops drawn from each 2D image per epoch
     input_size:       int   = 256   # slice H and W in pixels
-    n_channels:       int   = 1     # 1 = single 2D slice,  3 = 2.5D triplet
+    n_channels:       int   = 3     # 1 = single 2D slice,  3 = 2.5D triplet
     channel_spacing:  float = 1.0   # voxel gap between 2.5D channels
     max_tilt:         float = 90.0  # max tilt from XY plane in degrees (90 = fully random)
+
+    # ── Normalisation ─────────────────────────────────────────────────────────
+    # Fixed intensity window applied at both training and inference.
+    # Values outside [norm_min, norm_max] are clipped before scaling to [0, 1].
+    # Set these by inspecting representative volumes from your dataset.
+    norm_min: float = -0.00348197
+    norm_max: float = 0.00956331
 
     # ── Model ─────────────────────────────────────────────────────────────────
     architecture: str  = 'U-Net'    # UNet2D architecture string passed to smp
@@ -35,19 +42,19 @@ class TrainConfig:
     reset:        bool = False      # ignore existing checkpoint and start fresh
 
     # ── Optimiser ─────────────────────────────────────────────────────────────
-    epochs:       int   = 50
+    epochs:       int   = 100
     batch_size:   int   = 8
     lr:           float = 1e-4
     weight_decay: float = 1e-4
     ema_decay:    float = 0.99      # exponential moving average decay for model weights
 
     # ── Loss ──────────────────────────────────────────────────────────────────
-    loss:          str   = 'dice_ce' # loss function: dice, ce, iou, mcc, dice_ce, iou_ce, mcc_ce
+    loss:          str   = 'mcc_ce' # loss function: dice, ce, iou, mcc, dice_ce, iou_ce, mcc_ce
     loss_weight_a: float = 0.5       # weight of the first  component in combined losses
     loss_weight_b: float = 0.5       # weight of the second component in combined losses
 
     # ── Early stopping ────────────────────────────────────────────────────────
-    patience: int = 15              # epochs without val-dice improvement (0 = disabled)
+    patience: int = 20              # epochs without val-dice improvement (0 = disabled)
 
     # ── DataLoader ────────────────────────────────────────────────────────────
     workers: int = 4                # number of DataLoader worker processes

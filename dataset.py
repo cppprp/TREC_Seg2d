@@ -1,7 +1,9 @@
 """
-dataset_2d.py
--------------
-PyTorch Dataset that serves randomly-tilted 2D slices from annotated 3D patches.
+dataset.py
+----------
+PyTorch Datasets that serve 2D training samples: randomly-tilted slices from
+annotated 3D patches (TiltedSliceDataset) and random crops from fully-annotated
+2D images (FlatSliceDataset).
 
 Expected folder layout (same as your existing 3D training setup):
 
@@ -117,6 +119,8 @@ class TiltedSliceDataset(Dataset):
         preload         : load all patches into RAM at init (faster if RAM allows)
         fg_min_frac     : minimum fraction of foreground pixels to keep a slice
                           (set 0.0 to keep all slices including background-only)
+        norm_min        : fixed intensity lower bound (clipped and scaled to 0)
+        norm_max        : fixed intensity upper bound (clipped and scaled to 1)
     """
 
     def __init__(
@@ -130,6 +134,8 @@ class TiltedSliceDataset(Dataset):
         augment:          bool  = True,
         preload:          bool  = True,
         fg_min_frac:      float = 0.0,
+        norm_min:         float = 0.0,
+        norm_max:         float = 1.0,
     ):
         self.patches_dir      = Path(patches_dir)
         self.slices_per_patch = slices_per_patch
@@ -139,6 +145,8 @@ class TiltedSliceDataset(Dataset):
         self.max_tilt_deg     = max_tilt_deg
         self.augment          = augment
         self.fg_min_frac      = fg_min_frac
+        self.norm_min         = norm_min
+        self.norm_max         = norm_max
 
         # Discover patch pairs
         pairs = _find_patch_pairs(self.patches_dir)
@@ -212,12 +220,9 @@ class TiltedSliceDataset(Dataset):
             img_slice  = np.zeros((self.n_channels, self.output_size, self.output_size), np.float32)
             mask_slice = np.zeros((self.output_size, self.output_size), np.uint8)
 
-        # Normalise image to [0, 1]
-        img_min, img_max = img_slice.min(), img_slice.max()
-        if img_max > img_min:
-            img_slice = (img_slice - img_min) / (img_max - img_min)
-        else:
-            img_slice = np.zeros_like(img_slice)
+        # Normalise image to [0, 1] using fixed window
+        img_slice = np.clip(img_slice, self.norm_min, self.norm_max)
+        img_slice = (img_slice - self.norm_min) / (self.norm_max - self.norm_min)
 
         # Build target + weight
         target = mask_transform_2d(mask_slice)           # (2, H, W) float32 tensor
@@ -265,11 +270,15 @@ class FlatSliceDataset(Dataset):
         output_size:      int   = 256,
         augment:          bool  = True,
         preload:          bool  = True,
+        norm_min:         float = 0.0,
+        norm_max:         float = 1.0,
     ):
         self.patches_dir       = Path(patches_dir)
         self.patches_per_image = patches_per_image
         self.output_size       = output_size
         self.augment           = augment
+        self.norm_min          = norm_min
+        self.norm_max          = norm_max
 
         pairs = _find_patch_pairs(self.patches_dir)
         if len(pairs) == 0:
@@ -329,9 +338,9 @@ class FlatSliceDataset(Dataset):
         img_crop  = image[y0:y0+S, x0:x0+S]
         mask_crop = mask[y0:y0+S, x0:x0+S]
 
-        # Normalise to [0, 1]
-        lo, hi = img_crop.min(), img_crop.max()
-        img_crop = (img_crop - lo) / (hi - lo + 1e-8)
+        # Normalise to [0, 1] using fixed window
+        img_crop = np.clip(img_crop, self.norm_min, self.norm_max)
+        img_crop = (img_crop - self.norm_min) / (self.norm_max - self.norm_min)
 
         target = mask_transform_2d(mask_crop)       # (2, H, W) float32
         weight = _compute_sample_weight(mask_crop)  # (2, H, W) float32

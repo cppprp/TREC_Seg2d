@@ -1,18 +1,24 @@
 [project]
 name = "trec-seg2d"
 version = "0.1.0"
-description = "Add your description here"
+description = "2D U-Net segmentation pipeline for 3D plankton tomography volumes"
 requires-python = ">=3.10"
 dependencies = [
     "torch",
     "torchvision",
     "zarr>=3",
     "tifffile",
+    "imagecodecs",              # compressed-TIFF codecs for tifffile
     "wandb",
     "segmentation-models-pytorch",
     "scipy",
     "scikit-image",
     "tqdm",
     "numpy",
-    "connected-components-3d",
+    "pillow",                   # check_slices.py preview PNGs
+    "connected-components-3d",  # postprocess.py seed labelling
 ]
+
+[project.optional-dependencies]
+# GPU-accelerated watershed in postprocess.py; falls back to skimage (CPU) if absent
+gpu = ["cucim"]

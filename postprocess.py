@@ -19,7 +19,7 @@ Usage:
         --output /scratch/asvetlove/project_2d/instances/volume.tif \\
         --fg_threshold 0.5 \\
         --bd_threshold 0.4 \\
-        --min_size 100
+        --min_size 500
 """
 
 import argparse
@@ -48,7 +48,7 @@ def postprocess(
     output_path:   Path,
     fg_threshold:  float = 0.5,
     bd_threshold:  float = 0.4,
-    min_size:      int   = 100,
+    min_size:      int   = 500,
 ):
     t0 = time.time()
 

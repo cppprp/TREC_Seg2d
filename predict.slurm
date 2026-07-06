@@ -22,6 +22,9 @@ mkdir -p logs
 source ~/.bashrc
 conda activate trec_seg
 
+NORM_MIN=$(python -c "from config import DEFAULT_CONFIG; print(DEFAULT_CONFIG.norm_min)")
+NORM_MAX=$(python -c "from config import DEFAULT_CONFIG; print(DEFAULT_CONFIG.norm_max)")
+
 python predict.py \
     --input      /scratch/asvetlove/TREC/IMATREC_volumes/POR_10to40_20231023_AM_01_epo_02 \
     --project    /g/duke-mirror/asvetlove/TREC_seg/results \
@@ -30,4 +33,6 @@ python predict.py \
     --n_channels   3 \
     --overlap    0.25 \
     --axes       0 1 2 \
-    --save_tiff
+    --save_tiff \
+    --norm_min   "$NORM_MIN" \
+    --norm_max   "$NORM_MAX"

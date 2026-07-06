@@ -18,6 +18,7 @@ What to look for:
 import argparse
 import numpy as np
 import zarr
+import tifffile
 from pathlib import Path
 from PIL import Image, ImageDraw
 from extract_slices import extract_random_slice, mask_transform_2d
@@ -27,6 +28,8 @@ def load_volume(path):
     path = Path(path)
     if path.suffix == '.npy':
         return np.load(path)
+    elif path.suffix in ('.tif', '.tiff'):
+        return tifffile.imread(str(path))
     elif path.is_dir():  # zarr
         return np.array(zarr.open(str(path), mode='r')['0'])
     else:

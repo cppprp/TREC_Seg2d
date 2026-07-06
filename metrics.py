@@ -4,7 +4,7 @@ metrics.py
 Metrics and loss functions for the 2D UNet trainer.
 
 All functions expect model outputs as **probabilities** in [0, 1]
-(i.e. after softmax/sigmoid), not raw logits.
+(i.e. after the sigmoid applied in UNet2D.forward), not raw logits.
 
 Inputs are assumed to be (B, C, H, W) tensors unless noted otherwise.
 Default axes=[2,3] reduces over H and W, keeping B and C.
@@ -102,22 +102,8 @@ def mcc_loss(y_pred, y_true, weight=None, axes=[2, 3]):
     return 1 - mcc(y_pred, y_true, weight, axes)
 
 
-def dice_ce_loss(y_pred, y_true, weight=None, axes=[2, 3]):
-    """Computes the combined Dice and crossentropy loss."""
-    return dice_loss(y_pred, y_true, weight, axes) + \
-           crossentropy_loss(y_pred, y_true, weight, axes)
-
-
-def iou_ce_loss(y_pred, y_true, weight=None, axes=[2, 3]):
-    """Computes the combined IoU (Jaccard) and crossentropy loss."""
-    return iou_loss(y_pred, y_true, weight, axes) + \
-           crossentropy_loss(y_pred, y_true, weight, axes)
-
-
-def mcc_ce_loss(y_pred, y_true, weight=None, axes=[2, 3]):
-    """Computes the combined MCC and crossentropy loss."""
-    return mcc_loss(y_pred, y_true, weight, axes) + \
-           crossentropy_loss(y_pred, y_true, weight, axes)
+# Combined losses (dice_ce, iou_ce, mcc_ce) are assembled on demand by
+# compute_loss() below, which blends two base losses with weight_a / weight_b.
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +207,7 @@ def compute_dice(pred_probs: torch.Tensor, target: torch.Tensor,
                  threshold: float = 0.5, eps: float = 1e-6) -> dict:
     """
     Returns binary Dice for foreground and boundary channels separately.
-    Expects pred_probs as probabilities in [0, 1] (model already applies softmax).
+    Expects pred_probs as probabilities in [0, 1] (model already applies sigmoid).
     """
     pred = (pred_probs > threshold).float()
     metrics = {}

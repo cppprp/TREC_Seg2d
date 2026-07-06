@@ -3,8 +3,7 @@ train.py
 --------
 Offline training script for the 2D UNet on tilted plankton slices.
 
-Saves a checkpoint in the same format as live_trainer_tool.py so it can be
-dropped directly into predict_all_volumes() without any changes.
+Saves a model.ckpt that predict.py can load directly without any changes.
 
 Usage (local):
     python train.py --patches ./patches --project ./project_2d --epochs 50
@@ -64,6 +63,8 @@ def train(args):
             max_tilt_deg     = args.max_tilt,
             augment          = True,
             preload          = True,
+            norm_min         = args.norm_min,
+            norm_max         = args.norm_max,
         ))
     if args.patches_2d:
         datasets.append(FlatSliceDataset(
@@ -72,6 +73,8 @@ def train(args):
             output_size       = args.input_size,
             augment           = True,
             preload           = True,
+            norm_min          = args.norm_min,
+            norm_max          = args.norm_max,
         ))
     full_dataset = ConcatDataset(datasets) if len(datasets) > 1 else datasets[0]
 
@@ -224,7 +227,7 @@ def train(args):
             patience_counter = 0
             torch.save({
                 'num_classes': num_classes,
-                'model':       model_ema,   # same format as live_trainer_tool.py
+                'model':       model_ema,   # loaded directly by predict.py
                 'epoch':       epoch,
                 'val_dice_fg': val_dice_fg,
                 'val_dice_bd': val_dice_bd,
@@ -265,6 +268,10 @@ def parse_args():
     p.add_argument('--n_channels',        type=int,   default=cfg.n_channels)
     p.add_argument('--channel_spacing',   type=float, default=cfg.channel_spacing)
     p.add_argument('--max_tilt',          type=float, default=cfg.max_tilt)
+    p.add_argument('--norm_min',          type=float, default=cfg.norm_min,
+                   help='Fixed intensity lower bound — values below are clipped to 0')
+    p.add_argument('--norm_max',          type=float, default=cfg.norm_max,
+                   help='Fixed intensity upper bound — values above are clipped to 1')
 
     # Model
     p.add_argument('--architecture', default=cfg.architecture)

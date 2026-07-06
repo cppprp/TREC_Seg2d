@@ -3,8 +3,8 @@ model.py
 --------
 Model definition, loss combiner, and EMA helper for the 2D UNet trainer.
 
-UNet2D wraps segmentation_models_pytorch and applies softmax in forward(),
-so all downstream losses and metrics receive probabilities in [0, 1].
+UNet2D wraps segmentation_models_pytorch and applies a sigmoid in forward(),
+so all downstream losses and metrics receive per-channel probabilities in [0, 1].
 """
 
 import copy
@@ -24,7 +24,7 @@ from metrics import compute_loss
 class UNet2D(nn.Module):
     """
     A 2D UNet model with various architectures built by segmentation_models_pytorch.
-    forward() returns softmax probabilities, not logits.
+    forward() returns per-channel sigmoid probabilities, not logits.
     """
 
     def __init__(self,

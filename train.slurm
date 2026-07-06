@@ -19,17 +19,11 @@ export WANDB_DIR=/g/duke-mirror/asvetlove/TREC_seg/results/wandb
 
 
 python train.py \
-    --patches  /g/duke-mirror/asvetlove/TREC_seg/training_data/ \
-    --project  /g/duke-mirror/asvetlove/TREC_seg/results \
-    --epochs       100 \
-    --batch_size    64 \
-    --n_channels     3 \
-    --input_size   256 \
-    --max_tilt      90 \
-    --encoder  resnet34 \
-    --pretrained \
-    --loss       mcc_ce \
-    --patience      20 \
-    --workers       24 \
+    --patches      /g/duke-mirror/asvetlove/TREC_seg/training_data/ \
+    --project      /g/duke-mirror/asvetlove/TREC_seg/results_fixed \
+    --architecture U-Net \
+    --encoder      resnet34 \
+    --batch_size   64 \
+    --workers      24 \
     --wandb \
     --wandb_project plankton_2d
