@@ -164,8 +164,8 @@ class _TifSeriesVolume:
 def _open_volume(path):
     """Open a zarr, tif series dir, single-file tif, or remote WebKnossos volume."""
     url = str(path)
-    if url.startswith(("http://", "https://")):
-        return open_webknossos_zarr(url)
+    #if url.startswith(("http://", "https://")):
+    #    return open_webknossos_zarr(url)
     path = Path(path)
     if path.is_dir() and not str(path).endswith('.zarr'):
         return _TifSeriesVolume(path)
@@ -202,13 +202,16 @@ def setup_model(model_path, input_size=256, n_channels=1, batch_size=None):
 def _write_tiff_from_zarr(prediction_file, out_dir, stem, channels):
     channel_map = {'foreground': 0, 'boundary': 1}
     arr = zarr.open(str(prediction_file), 'r')['0']  # (Z, Y, X, 2) uint8
+    Z = arr.shape[0]
+    digits = len(str(Z - 1))
     for name in channels:
-        out_path = out_dir / f'{stem}_{name}.tif'
+        ch_dir = out_dir / f'{stem}_{name}'
+        ch_dir.mkdir(parents=True, exist_ok=True)
         ch = channel_map[name]
-        with tifffile.TiffWriter(str(out_path), bigtiff=True) as tw:
-            for z in range(arr.shape[0]):
-                tw.write(arr[z, :, :, ch])
-        print(f'  Saved {out_path.name}')
+        print(f'  Writing {Z} slices to {ch_dir.name}/')
+        for z in range(Z):
+            tifffile.imwrite(str(ch_dir / f'{z:0{digits}d}.tif'), arr[z, :, :, ch])
+        print(f'  Done.')
 
 
 def predict_volume(zarr_file, prediction_file, temp_folder, model, window, input_size=256, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2], save_tiff=None):
@@ -303,8 +306,9 @@ def predict_volume(zarr_file, prediction_file, temp_folder, model, window, input
     print(f'Completed volume {zarr_file.name} {tuple(input_volume_shape.astype(int).tolist())} in {time_elapsed}.')
 
 
-def predict_all_volumes(zarr_files, project_path, input_size=256, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2], save_tiff=None):
+def predict_all_volumes(zarr_files, project_path, output_dir=None, input_size=256, n_channels=1, num_classes=2, batch_size=None, overlap=0.25, axes=[0,1,2], save_tiff=None, temp_dir=None):
 
+    import os
     project_path = Path(project_path)
 
     model_path = project_path / 'model.ckpt'
@@ -312,8 +316,13 @@ def predict_all_volumes(zarr_files, project_path, input_size=256, n_channels=1, 
 
     window = gaussian_3d(input_size, sigma=0.125).astype('float32')
 
-    predictions_dir = project_path / 'predictions'
-    temp_dir = project_path / 'temp'
+    predictions_dir = Path(output_dir) if output_dir else project_path / 'predictions'
+    if temp_dir is None:
+        scratch = os.environ.get('TMPDIR') or os.environ.get('SLURM_TMPDIR')
+        temp_dir = Path(scratch) / 'trec_predict' if scratch else project_path / 'temp'
+    temp_dir = Path(temp_dir)
+    print(f'Predictions dir: {predictions_dir}')
+    print(f'Temp dir: {temp_dir}')
 
     for zarr_file in zarr_files:
         zarr_file = Path(zarr_file)
@@ -441,7 +450,9 @@ def main():
     p.add_argument('--input',      required=True, nargs='+', type=Path,
                    help='One or more .tif/.tiff/.zarr volume paths.')
     p.add_argument('--project',    required=True, type=Path,
-                   help='Project directory containing model.ckpt; predictions saved under <project>/predictions/.')
+                   help='Project directory containing model.ckpt.')
+    p.add_argument('--output',     type=Path, default=None,
+                   help='Directory to write predictions (default: <project>/predictions/).')
     p.add_argument('--input_size', type=int,   default=256,  # must match training --input_size
                    help='Sliding-window block size in voxels (default: 256).')
     p.add_argument('--n_channels', type=int,   default=1,
@@ -454,6 +465,9 @@ def main():
                    help='Inference batch size; auto-detected from GPU memory if omitted.')
     p.add_argument('--num_classes', type=int,  default=2,
                    help='Number of output classes (default: 2).')
+    p.add_argument('--temp_dir', type=Path, default=None,
+                   help='Directory for temporary zarr accumulators (default: $TMPDIR or <project>/temp). '
+                        'Use local node storage, not a network filesystem.')
     p.add_argument('--save_tiff', nargs='*', metavar='CHANNEL',
                    help='Write per-channel BigTIFF stacks. '
                         'No args = both channels; '
@@ -482,6 +496,7 @@ def main():
     predict_all_volumes(
         zarr_files  = inputs,
         project_path= args.project,
+        output_dir  = args.output,
         input_size  = args.input_size,
         n_channels  = args.n_channels,
         num_classes = args.num_classes,
@@ -489,6 +504,7 @@ def main():
         overlap     = args.overlap,
         axes        = args.axes,
         save_tiff   = args.save_tiff,
+        temp_dir    = args.temp_dir,
     )
 
 

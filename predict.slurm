@@ -8,6 +8,7 @@
 #SBATCH --mem-per-gpu=128000
 #SBATCH --cpus-per-task=1
 #SBATCH --time=12:00:00
+#SBATCH --tmp=300G
 #SBATCH --output=logs/predict_%j.log
 
 # Alternative GPU constraints (uncomment to use):
@@ -22,8 +23,9 @@ source ~/.bashrc
 conda activate trec_seg
 
 python predict.py \
-    --input      /g/duke-mirror/asvetlove/IMATREC_volumes/POR_10to40_20231023_AM_01_epo_02 \
+    --input      /scratch/asvetlove/TREC/IMATREC_volumes/POR_10to40_20231023_AM_01_epo_02 \
     --project    /g/duke-mirror/asvetlove/TREC_seg/results \
+    --output     /scratch/asvetlove/TREC/predictions \
     --input_size 256 \
     --n_channels   3 \
     --overlap    0.25 \
