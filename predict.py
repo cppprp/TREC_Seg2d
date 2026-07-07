@@ -196,7 +196,7 @@ def setup_model(model_path, input_size=256, n_channels=1, batch_size=None):
 
 def _write_tiff_from_zarr(prediction_file, out_dir, stem, channels):
     channel_map = {'foreground': 0, 'boundary': 1}
-    arr = zarr.open(str(prediction_file), 'r')['0']  # (Z, Y, X, 2) uint8
+    arr = zarr.open(str(prediction_file), mode='r')['0']  # (Z, Y, X, 2) uint8
     Z = arr.shape[0]
     digits = len(str(Z - 1))
     for name in channels:
