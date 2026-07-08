@@ -22,3 +22,5 @@ dependencies = [
 [project.optional-dependencies]
 # GPU-accelerated watershed in postprocess.py; falls back to skimage (CPU) if absent
 gpu = ["cucim"]
+# Upload postprocess results to a WebKnossos server (postprocess.py --upload_wk)
+wk = ["webknossos"]

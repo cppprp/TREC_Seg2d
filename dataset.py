@@ -100,6 +100,43 @@ def _compute_sample_weight(mask_slice: np.ndarray) -> torch.Tensor:
     return torch.tensor(np.stack([weight_map, weight_map], axis=0))  # (2, H, W)
 
 
+def _augment_intensity(
+    img:        torch.Tensor,
+    brightness: float = 0.10,
+    contrast:   float = 0.10,
+    gamma:      float = 0.10,
+    noise_std:  float = 0.01,
+) -> torch.Tensor:
+    """
+    Random photometric augmentation for a normalised [0, 1] image tensor (C, H, W).
+
+    Applies, each with 50% probability: additive brightness shift, contrast scaling
+    about the mean, gamma correction, and additive Gaussian noise — then clips back
+    to [0, 1]. For 2.5D triplets the same brightness/contrast/gamma is applied across
+    all channels (they are neighbouring slices of one acquisition); noise is per-pixel.
+
+    Only the image is touched — mask and weight are never passed here.
+    """
+    if brightness > 0 and torch.rand(1).item() < 0.5:
+        img = img + (torch.rand(1).item() * 2 - 1) * brightness
+
+    if contrast > 0 and torch.rand(1).item() < 0.5:
+        factor = 1.0 + (torch.rand(1).item() * 2 - 1) * contrast
+        mean   = img.mean()
+        img    = (img - mean) * factor + mean
+
+    # Gamma needs a non-negative base — clamp first.
+    img = img.clamp(0.0, 1.0)
+    if gamma > 0 and torch.rand(1).item() < 0.5:
+        g   = 1.0 + (torch.rand(1).item() * 2 - 1) * gamma
+        img = img.pow(g)
+
+    if noise_std > 0 and torch.rand(1).item() < 0.5:
+        img = img + torch.randn_like(img) * noise_std
+
+    return img.clamp(0.0, 1.0)
+
+
 # ---------------------------------------------------------------------------
 # Dataset
 # ---------------------------------------------------------------------------
@@ -136,6 +173,11 @@ class TiltedSliceDataset(Dataset):
         fg_min_frac:      float = 0.0,
         norm_min:         float = 0.0,
         norm_max:         float = 1.0,
+        intensity_aug:    bool  = True,
+        aug_brightness:   float = 0.10,
+        aug_contrast:     float = 0.10,
+        aug_gamma:        float = 0.10,
+        aug_noise_std:    float = 0.01,
     ):
         self.patches_dir      = Path(patches_dir)
         self.slices_per_patch = slices_per_patch
@@ -147,6 +189,11 @@ class TiltedSliceDataset(Dataset):
         self.fg_min_frac      = fg_min_frac
         self.norm_min         = norm_min
         self.norm_max         = norm_max
+        self.intensity_aug    = intensity_aug
+        self.aug_brightness   = aug_brightness
+        self.aug_contrast     = aug_contrast
+        self.aug_gamma        = aug_gamma
+        self.aug_noise_std    = aug_noise_std
 
         # Discover patch pairs
         pairs = _find_patch_pairs(self.patches_dir)
@@ -230,7 +277,13 @@ class TiltedSliceDataset(Dataset):
 
         image_t = torch.tensor(img_slice, dtype=torch.float32)  # (C, H, W)
 
-        # Augmentation (flips only — safe for both image and mask)
+        # Photometric augmentation — image only, never mask/weight.
+        if self.augment and self.intensity_aug:
+            image_t = _augment_intensity(image_t, self.aug_brightness,
+                                         self.aug_contrast, self.aug_gamma,
+                                         self.aug_noise_std)
+
+        # Geometric augmentation (flips — safe for both image and mask)
         if self.transforms is not None:
             image_t = tv_tensors.Image(image_t)
             target  = tv_tensors.Mask(target)
@@ -272,6 +325,11 @@ class FlatSliceDataset(Dataset):
         preload:          bool  = True,
         norm_min:         float = 0.0,
         norm_max:         float = 1.0,
+        intensity_aug:    bool  = True,
+        aug_brightness:   float = 0.10,
+        aug_contrast:     float = 0.10,
+        aug_gamma:        float = 0.10,
+        aug_noise_std:    float = 0.01,
     ):
         self.patches_dir       = Path(patches_dir)
         self.patches_per_image = patches_per_image
@@ -279,6 +337,11 @@ class FlatSliceDataset(Dataset):
         self.augment           = augment
         self.norm_min          = norm_min
         self.norm_max          = norm_max
+        self.intensity_aug     = intensity_aug
+        self.aug_brightness    = aug_brightness
+        self.aug_contrast      = aug_contrast
+        self.aug_gamma         = aug_gamma
+        self.aug_noise_std     = aug_noise_std
 
         pairs = _find_patch_pairs(self.patches_dir)
         if len(pairs) == 0:
@@ -345,6 +408,12 @@ class FlatSliceDataset(Dataset):
         target = mask_transform_2d(mask_crop)       # (2, H, W) float32
         weight = _compute_sample_weight(mask_crop)  # (2, H, W) float32
         image_t = torch.tensor(img_crop[None], dtype=torch.float32)  # (1, H, W)
+
+        # Photometric augmentation — image only, never mask/weight.
+        if self.augment and self.intensity_aug:
+            image_t = _augment_intensity(image_t, self.aug_brightness,
+                                         self.aug_contrast, self.aug_gamma,
+                                         self.aug_noise_std)
 
         if self.transforms is not None:
             image_t = tv_tensors.Image(image_t)

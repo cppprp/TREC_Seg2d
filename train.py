@@ -65,6 +65,11 @@ def train(args):
             preload          = True,
             norm_min         = args.norm_min,
             norm_max         = args.norm_max,
+            intensity_aug    = args.intensity_aug,
+            aug_brightness   = args.aug_brightness,
+            aug_contrast     = args.aug_contrast,
+            aug_gamma        = args.aug_gamma,
+            aug_noise_std    = args.aug_noise_std,
         ))
     if args.patches_2d:
         datasets.append(FlatSliceDataset(
@@ -75,6 +80,11 @@ def train(args):
             preload           = True,
             norm_min          = args.norm_min,
             norm_max          = args.norm_max,
+            intensity_aug     = args.intensity_aug,
+            aug_brightness    = args.aug_brightness,
+            aug_contrast      = args.aug_contrast,
+            aug_gamma         = args.aug_gamma,
+            aug_noise_std     = args.aug_noise_std,
         ))
     full_dataset = ConcatDataset(datasets) if len(datasets) > 1 else datasets[0]
 
@@ -272,6 +282,19 @@ def parse_args():
                    help='Fixed intensity lower bound — values below are clipped to 0')
     p.add_argument('--norm_max',          type=float, default=cfg.norm_max,
                    help='Fixed intensity upper bound — values above are clipped to 1')
+
+    # Intensity augmentation (training image only; off for validation)
+    p.add_argument('--intensity_aug', action=argparse.BooleanOptionalAction,
+                   default=cfg.intensity_aug,
+                   help='Enable photometric augmentation (--no-intensity_aug to disable)')
+    p.add_argument('--aug_brightness',    type=float, default=cfg.aug_brightness,
+                   help='Max additive brightness shift (0 disables)')
+    p.add_argument('--aug_contrast',      type=float, default=cfg.aug_contrast,
+                   help='Max contrast scale deviation (0 disables)')
+    p.add_argument('--aug_gamma',         type=float, default=cfg.aug_gamma,
+                   help='Max gamma deviation (0 disables)')
+    p.add_argument('--aug_noise_std',     type=float, default=cfg.aug_noise_std,
+                   help='Additive Gaussian noise std-dev (0 disables)')
 
     # Model
     p.add_argument('--architecture', default=cfg.architecture)

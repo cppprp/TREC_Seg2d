@@ -35,6 +35,16 @@ class TrainConfig:
     norm_min: float = -0.00348197
     norm_max: float = 0.00956331
 
+    # ── Intensity augmentation ────────────────────────────────────────────────
+    # Photometric augmentation of the (already normalised) training image only —
+    # never the mask or weight. Off automatically for validation. Each transform
+    # fires with 50% probability; the value is the max deviation. 0 disables one.
+    intensity_aug:  bool  = True   # master toggle for all photometric augmentation
+    aug_brightness: float = 0.10   # additive shift range,     img + U(-b, b)
+    aug_contrast:   float = 0.10   # contrast scale range,      (img-mean)*U(1-c,1+c)+mean
+    aug_gamma:      float = 0.10   # gamma range,               img ** U(1-g, 1+g)
+    aug_noise_std:  float = 0.01   # additive Gaussian noise standard deviation
+
     # ── Model ─────────────────────────────────────────────────────────────────
     architecture: str  = 'U-Net'    # UNet2D architecture string passed to smp
     encoder:      str  = 'resnet34' # encoder backbone (any smp-compatible name)
