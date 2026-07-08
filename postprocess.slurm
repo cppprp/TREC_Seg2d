@@ -15,7 +15,12 @@
 mkdir -p logs
 
 source ~/.bashrc
-conda activate trec_seg
+
+# NOTE: two conda envs are both named 'trec_seg' (a mamba one on Python 3.10 with
+# zarr 2, and this miniforge3 one on Python 3.11 with zarr 3). Only the zarr-3 env
+# can read the v3 prediction store, so pin its interpreter by full path rather than
+# relying on the ambiguous `conda activate trec_seg`.
+PYTHON=/home/asvetlove/miniforge3/envs/trec_seg/bin/python
 
 # WebKnossos token — keep it OUT of this file (it would end up in git / logs).
 # Store it once in ~/.wk_token (chmod 600), or `export WK_TOKEN=...` in your shell
@@ -29,7 +34,7 @@ PRED=/scratch/asvetlove/TREC/predictions/$SAMPLE
 RAW=/scratch/asvetlove/TREC/IMATREC_volumes/$SAMPLE
 OUT=/scratch/asvetlove/TREC/results/${SAMPLE}_instances
 
-python postprocess.py \
+$PYTHON postprocess.py \
     --input        $PRED \
     --output       $OUT \
     --fg_threshold 0.5 \
