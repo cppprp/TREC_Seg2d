@@ -13,6 +13,9 @@ mkdir -p logs
 
 source ~/.bashrc
 
+# Stream prints to the log in real time instead of block-buffering them.
+export PYTHONUNBUFFERED=1
+
 # Pin the interpreter by full path — two conda envs are both named 'trec_seg'
 # (mamba/Python 3.10/zarr 2 and miniforge3/Python 3.11/zarr 3); avoid the
 # ambiguous `conda activate trec_seg`.

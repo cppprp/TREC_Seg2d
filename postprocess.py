@@ -83,11 +83,15 @@ def upload_to_webknossos(
     from predict import _open_volume
 
     # --- Raw image → uint8 with the same fixed window used in training ---
+    # Normalise in-place to avoid extra full-size float32 copies of a large volume.
     print(f"Loading raw volume for color layer: {raw_path}")
     raw_vol = _open_volume(raw_path)
-    raw = np.asarray(raw_vol[:, :, :]).astype(np.float32)  # (Z, Y, X)
-    raw = np.clip(raw, norm_min, norm_max)
-    raw = ((raw - norm_min) / (norm_max - norm_min) * 255.0).astype(np.uint8)
+    raw = np.asarray(raw_vol[:, :, :]).astype(np.float32, copy=False)  # (Z, Y, X)
+    np.clip(raw, norm_min, norm_max, out=raw)
+    raw -= norm_min
+    raw /= (norm_max - norm_min)
+    raw *= 255.0
+    raw = raw.astype(np.uint8)
 
     if raw.shape != instances.shape:
         raise ValueError(
@@ -165,17 +169,24 @@ def postprocess(
     t0 = time.time()
 
     # --- Load predictions ---
+    # Keep the probability channels as uint8 (0-255) rather than converting to
+    # float32. Thresholds and the watershed landscape work just as well in uint8,
+    # at 1/4 the RAM — critical for large volumes (float32 here OOM-kills a
+    # ~9e9-voxel volume even at 200 GB).
     pred_store = zarr.open(str(input_path), mode='r')['0']
     print(f"Prediction shape : {pred_store.shape}  dtype={pred_store.dtype}")
-    print("Loading foreground channel...")
-    fg_prob = pred_store[:, :, :, 0].astype(np.float32) / 255.0   # (Z, Y, X)
-    print("Loading boundary channel...")
-    bd_prob = pred_store[:, :, :, 1].astype(np.float32) / 255.0   # (Z, Y, X)
+    fg_thr = int(round(fg_threshold * 255))
+    bd_thr = int(round(bd_threshold * 255))
 
-    # --- Threshold ---
-    foreground = fg_prob > fg_threshold   # bool (Z, Y, X)
-    boundary   = bd_prob > bd_threshold   # bool (Z, Y, X)
-    del bd_prob
+    print("Loading foreground channel...")
+    fg = pred_store[:, :, :, 0]   # (Z, Y, X) uint8
+    print("Loading boundary channel...")
+    bd = pred_store[:, :, :, 1]   # (Z, Y, X) uint8
+
+    # --- Threshold (compared in uint8 space) ---
+    foreground = fg > fg_thr   # bool (Z, Y, X)
+    boundary   = bd > bd_thr   # bool (Z, Y, X)
+    del bd
 
     print(f"Foreground voxels : {foreground.sum():,}  ({100*foreground.mean():.1f}%)")
 
@@ -189,10 +200,13 @@ def postprocess(
     print(f"Seeds found       : {n_seeds:,}")
 
     # --- Watershed ---
-    # Landscape: invert foreground probability so high-confidence voxels fill first
+    # Landscape: invert foreground probability (uint8) so high-confidence voxels
+    # fill first — equivalent to -fg_prob but 1/4 the memory.
     print(f"Running watershed ({_WATERSHED_BACKEND})...")
-    instances = watershed(-fg_prob, markers=seeds, mask=foreground, compactness=0)
-    del fg_prob, foreground, seeds
+    landscape = 255 - fg
+    del fg
+    instances = watershed(landscape, markers=seeds, mask=foreground, compactness=0)
+    del landscape, foreground, seeds
 
     # --- Remove small objects ---
     print(f"Removing objects < {min_size} voxels...")

@@ -3,7 +3,7 @@
 #SBATCH --nodes=1
 #SBATCH --partition=htc-el8
 #SBATCH --cpus-per-task=8
-#SBATCH --mem=200G
+#SBATCH --mem=250G
 #SBATCH --time=03:00:00
 #SBATCH --output=logs/postprocess_%j.log
 
@@ -15,6 +15,9 @@
 mkdir -p logs
 
 source ~/.bashrc
+
+# Stream prints to the log in real time instead of block-buffering them.
+export PYTHONUNBUFFERED=1
 
 # NOTE: two conda envs are both named 'trec_seg' (a mamba one on Python 3.10 with
 # zarr 2, and this miniforge3 one on Python 3.11 with zarr 3). Only the zarr-3 env
