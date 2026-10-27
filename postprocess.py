@@ -127,7 +127,8 @@ def upload_to_webknossos(
         )
         color.bounding_box = bbox
         color.add_mag('1', compress=True).write(raw_xyz, allow_resize=True)
-        print("  color layer written")
+        del raw_xyz
+        print("  color layer written (mag 1)")
 
         seg = local_ds.add_layer(
             layer_name         = 'instances',
@@ -139,7 +140,25 @@ def upload_to_webknossos(
         )
         seg.bounding_box = bbox
         seg.add_mag('1', compress=True).write(seg_xyz, allow_resize=True)
-        print(f"  segmentation layer written ({seg_dtype})")
+        del seg_xyz
+        print(f"  segmentation layer written (mag 1, {seg_dtype})")
+
+        # --- Build the resolution pyramid (WebKnossos needs it for zoomed-out
+        #     views). This is the heavy step — parallelise it across all the
+        #     cores SLURM gave us. Color averages, segmentation uses mode voting
+        #     automatically based on layer category.
+        n_jobs = int(os.environ.get('SLURM_CPUS_PER_TASK', 0)) or (os.cpu_count() or 1)
+        print(f"Downsampling both layers ({n_jobs} workers)...")
+        try:
+            from cluster_tools import MultiprocessingExecutor
+            with MultiprocessingExecutor(max_workers=n_jobs) as executor:
+                color.downsample(executor=executor)
+                seg.downsample(executor=executor)
+        except Exception as e:
+            print(f"  Parallel downsample unavailable ({e}); running sequentially.")
+            color.downsample()
+            seg.downsample()
+        print("  downsampling done")
 
         print(f"Uploading '{dataset_name}' to {url} ...")
         with wk.webknossos_context(token=token, url=url):
