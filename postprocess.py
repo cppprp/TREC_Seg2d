@@ -217,6 +217,14 @@ def postprocess(
     n_seeds = int(seeds.max())
     del seeds_binary
     print(f"Seeds found       : {n_seeds:,}")
+    # Watershed only ever propagates existing seed labels (it never invents new
+    # ones), so the result fits whatever dtype holds the seeds. Downcast to
+    # uint16 when the seed count allows — this halves both the marker array and
+    # the watershed output, which together are the memory peak of this script.
+    # A lower peak lets the job land on a node that already has other jobs on it
+    # instead of waiting for one to drain, which is the main scheduling cost.
+    if n_seeds <= np.iinfo(np.uint16).max:
+        seeds = seeds.astype(np.uint16)
 
     # --- Watershed ---
     # Landscape: invert foreground probability (uint8) so high-confidence voxels

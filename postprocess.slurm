@@ -3,7 +3,7 @@
 #SBATCH --nodes=1
 #SBATCH --partition=htc-el8
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=250G
+#SBATCH --mem=160G
 #SBATCH --time=03:00:00
 #SBATCH --output=logs/postprocess_%j.log
 
@@ -33,9 +33,12 @@ PYTHON=/home/asvetlove/miniforge3/envs/trec_seg/bin/python
 # ── Change this per run ────────────────────────────────────────────────────────
 SAMPLE=POR_10to40_20231023_AM_01_epo_02
 
-PRED=/scratch/asvetlove/TREC/predictions/$SAMPLE
+# NOTE: /scratch is auto-purged, so read predictions from (and write instances to)
+# the persistent duke-mirror copy. RAW is still on scratch here; move it to a
+# persistent path too if it later gets purged.
+PRED=/g/duke-mirror/asvetlove/TREC_seg/results/predictions/$SAMPLE
 RAW=/scratch/asvetlove/TREC/IMATREC_volumes/$SAMPLE
-OUT=/scratch/asvetlove/TREC/results/${SAMPLE}_instances
+OUT=/g/duke-mirror/asvetlove/TREC_seg/results/instances/${SAMPLE}_instances
 
 $PYTHON postprocess.py \
     --input        $PRED \
