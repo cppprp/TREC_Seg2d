@@ -3,7 +3,7 @@
 #SBATCH --nodes=1
 #SBATCH --partition=htc-el8
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=160G
+#SBATCH --mem=200G
 #SBATCH --time=03:00:00
 #SBATCH --output=logs/postprocess_%j.log
 
