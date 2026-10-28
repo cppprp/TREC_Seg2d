@@ -34,8 +34,8 @@ NORM_MAX=$($PYTHON -c "from config import DEFAULT_CONFIG; print(DEFAULT_CONFIG.n
 
 $PYTHON predict.py \
     --input      /scratch/asvetlove/TREC/IMATREC_volumes/POR_10to40_20231023_AM_01_epo_02 \
-    --project    /g/duke-mirror/asvetlove/TREC_seg/results \
-    --output     /scratch/asvetlove/TREC/predictions \
+    --project    /g/duke-mirror/asvetlove/TREC_seg/results_fixed \
+    --output     /g/duke-mirror/asvetlove/TREC_seg/results/predictions \
     --input_size 256 \
     --n_channels   3 \
     --overlap    0.25 \

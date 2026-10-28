@@ -207,7 +207,16 @@ def postprocess(
     boundary   = bd > bd_thr   # bool (Z, Y, X)
     del bd
 
-    print(f"Foreground voxels : {foreground.sum():,}  ({100*foreground.mean():.1f}%)")
+    n_fg = int(foreground.sum())
+    print(f"Foreground voxels : {n_fg:,}  ({100*foreground.mean():.1f}%)")
+    if n_fg == 0:
+        del fg, foreground
+        raise ValueError(
+            f"No foreground voxels above threshold {fg_threshold} in {input_path}. "
+            f"The prediction store is empty or all-zero — this usually means its "
+            f"chunk data is missing (e.g. only the zarr metadata was copied). "
+            f"Verify the store on disk before re-running."
+        )
 
     # --- Seeds: foreground regions not touching boundaries ---
     seeds_binary = foreground & ~boundary
